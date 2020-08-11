@@ -6,8 +6,6 @@ import io.github.yedaxia.apidocs.plugin.rap.RapSupportPlugin;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Properties;
 
 /**
@@ -70,7 +68,7 @@ public class Docs {
             }
 
             config.docsPath = properties.getProperty("docsPath", null);
-            config.codeTplPath = properties.getProperty("codeTplPath", null);
+            config.resourcePath = properties.getProperty("resourcePath", null);
             config.mvcFramework = properties.getProperty("mvcFramework", "");
             return config;
         }catch (IOException e){

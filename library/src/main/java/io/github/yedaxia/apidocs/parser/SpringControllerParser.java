@@ -5,13 +5,16 @@ import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.*;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
 import io.github.yedaxia.apidocs.ParseUtils;
 import io.github.yedaxia.apidocs.Utils;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * use for spring mvc
@@ -105,6 +108,13 @@ public class SpringControllerParser extends AbsControllerParser {
 
                 p.getAnnotations().forEach(an -> {
                     String name = an.getNameAsString();
+
+                    // @NotNull, @NotBlank, @NotEmpty
+                    if(ParseUtils.isNotNullAnnotation(name)){
+                        paramNode.setRequired(true);
+                        return;
+                    }
+
                     if (!"RequestParam".equals(name) && !"RequestBody".equals(name) && !"PathVariable".equals(name)) {
                         return;
                     }
@@ -113,16 +123,19 @@ public class SpringControllerParser extends AbsControllerParser {
                         setRequestBody(paramNode, p.getType());
                     }
 
+                    // @RequestParam String name
                     if (an instanceof MarkerAnnotationExpr) {
                         paramNode.setRequired(true);
                         return;
                     }
 
+                   //  @RequestParam("email") String email
                     if(an instanceof SingleMemberAnnotationExpr){
                         paramNode.setName(((StringLiteralExpr) ((SingleMemberAnnotationExpr) an).getMemberValue()).getValue());
                         return;
                     }
 
+                    // @RequestParam(name = "email", required = true)
                     if (an instanceof NormalAnnotationExpr) {
                         ((NormalAnnotationExpr) an).getPairs().forEach(pair -> {
                             String exprName = pair.getNameAsString();
@@ -135,11 +148,10 @@ public class SpringControllerParser extends AbsControllerParser {
                             }
                         });
                     }
-
                 });
 
                 //如果参数是个对象
-                if(!paramNode.isJsonBody() && ParseUtils.isModelType(p.getType().asString())){
+                if(!paramNode.isJsonBody() && ParseUtils.isModelType(paramNode.getType())){
                     ClassNode classNode = new ClassNode();
                     ParseUtils.parseClassNodeByType(getControllerFile(), classNode, p.getType());
                     List<ParamNode> paramNodeList = new ArrayList<>();
@@ -149,6 +161,26 @@ public class SpringControllerParser extends AbsControllerParser {
                 }
             }
         });
+    }
+
+    @Override
+    protected void handleResponseNode(ResponseNode responseNode, Type resultType, File controllerFile) {
+        if(resultType instanceof ClassOrInterfaceType) {
+            String className = ((ClassOrInterfaceType) resultType).getName().getIdentifier();
+            if("org.springframework.http.ResponseEntity".endsWith(className)){
+                Optional<NodeList<Type>> nodeListOptional = ((ClassOrInterfaceType) resultType).getTypeArguments();
+                if(nodeListOptional.isPresent()){
+                    NodeList<Type> typeNodeList = nodeListOptional.get();
+                    if(!typeNodeList.isEmpty()){
+                        resultType = typeNodeList.get(0).getElementType();
+                    }
+                }else{
+                    responseNode.setClassName(className);
+                    return;
+                }
+            }
+        }
+        super.handleResponseNode(responseNode, resultType, controllerFile);
     }
 
     private void setRequestBody(ParamNode paramNode, Type paramType) {

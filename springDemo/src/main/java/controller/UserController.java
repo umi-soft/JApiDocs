@@ -2,12 +2,13 @@ package controller;
 
 import form.UserForm;
 import form.UserListForm;
+import io.github.yedaxia.apidocs.Ignore;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import result.ApiResult;
 import result.PageResult;
 import result.user.UserVO;
 
-import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 /**
@@ -50,6 +51,16 @@ public class UserController {
         return null;
     }
 
+    /**
+     * 上传头像
+     *
+     * @param avatar
+     * @return
+     */
+    @PostMapping("upload-avatar")
+    public ApiResult uploadAvatar(MultipartFile avatar){
+        return null;
+    }
 
     /**
      * 修改用户信息
@@ -71,6 +82,36 @@ public class UserController {
     }
 
     public ApiResult hello(){
+        return null;
+    }
+
+    /**
+     * 获取图片
+     */
+    @GetMapping("get-image")
+    public void getImage(){
+
+    }
+
+    /**
+     * 用户列表2
+     *
+     * @param userId 用户ID
+     * @param user
+     * @return
+     */
+    @GetMapping("list2")
+    public ApiResult<UserVO> list2(@RequestParam Long userId, @RequestBody UserForm user){
+        return null;
+    }
+
+    /**
+     * 忽略该接口
+     * @return
+     */
+    @Ignore
+    @PostMapping("ignore")
+    public ApiResult ignore(){
         return null;
     }
 }

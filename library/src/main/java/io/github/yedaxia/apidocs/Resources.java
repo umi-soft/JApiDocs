@@ -11,8 +11,17 @@ import java.io.*;
 public class Resources {
 
     private static boolean isDebug = false;
-    private static String sResourcePath;
-    private static String sUserCodeTplPath;
+    private static String debugResourcePath;
+
+    static {
+        try {
+            if(!isDebug){
+                freemarker.log.Logger.selectLoggerLibrary(freemarker.log.Logger.LIBRARY_NONE);
+            }
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+        }
+    }
 
     /**
      * get template file
@@ -20,15 +29,21 @@ public class Resources {
      * @return
      */
     public static InputStream getTemplateFile(String fileName) throws FileNotFoundException{
-        if(isDebug){
-            return new FileInputStream(new File(sResourcePath,fileName));
-        }else{
-            return Resources.class.getClass().getResourceAsStream("/" + fileName);
-        }
-    }
 
-    static void setUserCodeTplPath(String userCodeTplPath){
-        sUserCodeTplPath = userCodeTplPath;
+        if(isDebug) {
+            return new FileInputStream(new File(debugResourcePath, fileName));
+        }
+
+        final String userResPath = getUserResourcePath();
+
+        if(getUserResourcePath() != null){
+            File tplFile = new File(userResPath,fileName);
+            if(tplFile.isFile() && tplFile.exists()) {
+                return new FileInputStream(tplFile);
+            }
+        }
+
+        return Resources.class.getResourceAsStream("/" + fileName);
     }
 
     /**
@@ -38,16 +53,7 @@ public class Resources {
      * @return
      */
     public static InputStream getCodeTemplateFile(String fileName)throws FileNotFoundException{
-        if(sUserCodeTplPath != null){
-            File tplFile = new File(sUserCodeTplPath,fileName);
-            if(tplFile.isFile() && tplFile.exists()){
-                return new FileInputStream(tplFile);
-            }else{
-                return Resources.class.getClass().getResourceAsStream("/" + fileName);
-            }
-        }else{
-            return getTemplateFile(fileName);
-        }
+        return getTemplateFile(fileName);
     }
 
     /**
@@ -59,18 +65,28 @@ public class Resources {
      */
     public static Template getFreemarkerTemplate(String fileName) throws IOException {
         Configuration conf = new Configuration(Configuration.VERSION_2_3_0);
+        conf.setDefaultEncoding("utf-8");
         if(isDebug){
-            conf.setDirectoryForTemplateLoading(new File(sResourcePath));
+            conf.setDirectoryForTemplateLoading(new File(debugResourcePath));
         }else{
-            conf.setClassForTemplateLoading(Resources.class, "/");
+            final String userResPath = getUserResourcePath();
+            File tplFile = new File(userResPath,fileName);
+            if(tplFile.isFile() && tplFile.exists()) {
+                conf.setDirectoryForTemplateLoading(new File(userResPath));
+            }else {
+                conf.setClassForTemplateLoading(Resources.class, "/");
+            }
         }
         return conf.getTemplate(fileName);
+    }
+
+    private static String getUserResourcePath(){
+        return DocContext.getDocsConfig().resourcePath;
     }
 
 
     public static void setDebug(){
         isDebug = true;
-        sResourcePath = System.getProperty("user.dir") + "/build/resources/main";
-        sUserCodeTplPath = sResourcePath;
+        debugResourcePath = System.getProperty("user.dir") + "/build/resources/main";
     }
 }

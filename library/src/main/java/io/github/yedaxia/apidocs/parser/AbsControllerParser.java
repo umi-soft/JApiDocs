@@ -6,14 +6,14 @@ import com.github.javaparser.ast.PackageDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.*;
+import com.github.javaparser.ast.type.ArrayType;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.javadoc.JavadocBlockTag;
-import io.github.yedaxia.apidocs.DocContext;
-import io.github.yedaxia.apidocs.ParseUtils;
-import io.github.yedaxia.apidocs.Utils;
+import io.github.yedaxia.apidocs.*;
 import io.github.yedaxia.apidocs.consts.ChangeFlag;
 
 import java.io.File;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -89,8 +89,12 @@ public abstract class AbsControllerParser {
                 .filter(m -> m.getModifiers().contains(Modifier.PUBLIC))
                 .forEach(m -> {
 
-                    boolean existsApiDoc = m.getAnnotationByName("ApiDoc").isPresent();
+                    boolean existsApiDoc = m.getAnnotationByName(ApiDoc.class.getSimpleName()).isPresent();
                     if (!existsApiDoc && !controllerNode.getGenerateDocs() && !DocContext.getDocsConfig().getAutoGenerate()) {
+                        return;
+                    }
+
+                    if(m.getAnnotationByName(Ignore.class.getSimpleName()).isPresent()){
                         return;
                     }
 
@@ -132,7 +136,26 @@ public abstract class AbsControllerParser {
                         }
 
                         if (paramNode != null) {
-                            paramNode.setType(ParseUtils.unifyType(p.getType().asString()));
+                            Type pType = p.getType();
+                            boolean isList = false;
+                            if(pType instanceof ArrayType){
+                                isList = true;
+                                pType = ((ArrayType) pType).getComponentType();
+                            }else if(ParseUtils.isCollectionType(pType.asString())){
+                                List<ClassOrInterfaceType> collectionTypes = pType.getChildNodesByType(ClassOrInterfaceType.class);
+                                isList = true;
+                                if(!collectionTypes.isEmpty()){
+                                    pType = collectionTypes.get(0);
+                                }else{
+                                    paramNode.setType("Object[]");
+                                }
+                            }else{
+                                pType = p.getType();
+                            }
+                            if(paramNode.getType() == null){
+                                final String pUnifyType = ParseUtils.unifyType(pType.asString());
+                                paramNode.setType(isList ? pUnifyType + "[]": pUnifyType);
+                            }
                         }
                     });
 
@@ -166,7 +189,7 @@ public abstract class AbsControllerParser {
 
                     ResponseNode responseNode = new ResponseNode();
                     responseNode.setRequestNode(requestNode);
-                    ParseUtils.parseClassNodeByType(javaFile, responseNode, resultClassType.getElementType());
+                    handleResponseNode(responseNode, resultClassType.getElementType(), javaFile);
                     requestNode.setResponseNode(responseNode);
                     setRequestNodeChangeFlag(requestNode);
                     controllerNode.addRequestNode(requestNode);
@@ -190,12 +213,34 @@ public abstract class AbsControllerParser {
     }
 
     /**
+     * handle response object
+     *
+     * @param responseNode
+     * @param resultType
+     * @param controllerFile
+     */
+    protected void handleResponseNode(ResponseNode responseNode, com.github.javaparser.ast.type.Type resultType, File controllerFile){
+        // maybe void
+        if(resultType instanceof ClassOrInterfaceType){
+            // 解析方法返回类的泛型信息
+            ((ClassOrInterfaceType) resultType).getTypeArguments().ifPresent(typeList->typeList.forEach(argType->{
+                GenericNode rootGenericNode = new GenericNode();
+                rootGenericNode.setFromJavaFile(controllerFile);
+                rootGenericNode.setClassType(argType);
+                responseNode.addGenericNode(rootGenericNode);
+            }));
+            ParseUtils.parseClassNodeByType(controllerFile, responseNode, resultType);
+        }
+    }
+
+    /**
      * called after request method node has handled
      */
     protected void afterHandleMethod(RequestNode requestNode, MethodDeclaration md) {
     }
 
 
+    // 设置接口的类型（新/修改/一样）
     private void setRequestNodeChangeFlag(RequestNode requestNode) {
         List<ControllerNode> lastControllerNodeList = DocContext.getLastVersionControllerNodes();
         if (lastControllerNodeList == null || lastControllerNodeList.isEmpty()) {
